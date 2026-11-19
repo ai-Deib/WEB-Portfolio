@@ -1706,7 +1706,13 @@ function Studio() {
 }
 
 function App() {
-  return window.location.pathname.replace(/\/+$/, "") === "/studio" ? <Studio /> : <PublicPortfolio />;
+  const isStudio = window.location.pathname.replace(/\/+$/, "") === "/studio";
+
+  useEffect(() => {
+    document.title = isStudio ? "Xairo.Studio" : "Xairo.Creatives";
+  }, [isStudio]);
+
+  return isStudio ? <Studio /> : <PublicPortfolio />;
 }
 
 createRoot(document.getElementById("root")).render(<App />);
