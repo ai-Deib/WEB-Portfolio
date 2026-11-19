@@ -135,7 +135,9 @@ button { color: inherit; }
   cursor: pointer;
   scroll-snap-align: center;
   scroll-snap-stop: always;
-  transition: color .2s, border-color .2s, background .2s, opacity .2s, transform .2s;
+  transition: color .28s ease, border-color .28s ease, background .28s ease,
+    opacity .34s cubic-bezier(.2, .7, .2, 1), transform .34s cubic-bezier(.2, .7, .2, 1),
+    box-shadow .28s ease;
 }
 .category-option:hover { color: #fff; }
 .category-option.active { border-color: rgba(30, 215, 96, .45); background: rgba(30, 215, 96, .07); color: #fff; box-shadow: inset 0 0 18px rgba(30, 215, 96, .045); }
@@ -665,6 +667,7 @@ button:not(.category-option):not(:disabled):active { animation: button-press .16
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  .category-wheel-viewport { scroll-behavior: auto; }
   [data-reveal] { opacity: 1 !important; translate: none !important; filter: none !important; transition: none !important; }
   button:not(.category-option):not(:disabled):active { animation: none; }
   .round-link:hover, .contact-trigger:hover { transform: none; }

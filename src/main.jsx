@@ -211,6 +211,7 @@ function PublicPortfolio() {
   const categoryWheelRef = useRef(null);
   const categoryOptionRefs = useRef(new Map());
   const wheelScrollTimeout = useRef(null);
+  const wheelTargetIndexRef = useRef(0);
 
   useEffect(() => {
     const targets = document.querySelectorAll(".public-site [data-reveal]");
@@ -302,37 +303,98 @@ function PublicPortfolio() {
     const viewport = categoryWheelRef.current;
     const option = categoryOptionRefs.current.get(filter);
     if (!viewport || !option) return;
+    wheelTargetIndexRef.current = Math.max(0, categoryOptions.indexOf(filter));
     const top = option.offsetTop - (viewport.clientHeight - option.offsetHeight) / 2;
-    viewport.scrollTo({ top, behavior: "smooth" });
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    viewport.scrollTo({ top, behavior });
     setSelectedProjectIndex(0);
   }, [categoryOptions, filter]);
 
   useEffect(() => () => window.clearTimeout(wheelScrollTimeout.current), []);
 
+  useEffect(() => {
+    const viewport = categoryWheelRef.current;
+    if (!viewport) return undefined;
+    let accumulatedDelta = 0;
+    let resetTimeout = 0;
+
+    function handleWheel(event) {
+      if (event.ctrlKey) return;
+      event.preventDefault();
+
+      const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? viewport.clientHeight
+          : 1;
+      accumulatedDelta += event.deltaY * deltaScale;
+      window.clearTimeout(resetTimeout);
+      resetTimeout = window.setTimeout(() => {
+        accumulatedDelta = 0;
+      }, 140);
+
+      if (Math.abs(accumulatedDelta) < 80) return;
+      const direction = Math.sign(accumulatedDelta);
+      accumulatedDelta = 0;
+
+      const nextIndex = Math.max(
+        0,
+        Math.min(categoryOptions.length - 1, wheelTargetIndexRef.current + direction),
+      );
+      if (nextIndex === wheelTargetIndexRef.current) return;
+      wheelTargetIndexRef.current = nextIndex;
+      selectCategory(categoryOptions[nextIndex]);
+    }
+
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener("wheel", handleWheel);
+      window.clearTimeout(resetTimeout);
+    };
+  }, [categoryOptions, filter]);
+
   function selectCategory(category) {
     if (category === filter) return;
+    wheelTargetIndexRef.current = categoryOptions.indexOf(category);
     setFilter(category);
     setSelectedProjectIndex(0);
   }
 
+  function selectNearestCategory() {
+    const viewport = categoryWheelRef.current;
+    if (!viewport) return;
+    const center = viewport.scrollTop + viewport.clientHeight / 2;
+    let closestCategory = filter;
+    let closestDistance = Infinity;
+    for (const [category, option] of categoryOptionRefs.current) {
+      const distance = Math.abs(option.offsetTop + option.offsetHeight / 2 - center);
+      if (distance < closestDistance) {
+        closestCategory = category;
+        closestDistance = distance;
+      }
+    }
+    wheelTargetIndexRef.current = categoryOptions.indexOf(closestCategory);
+    selectCategory(closestCategory);
+  }
+
   function handleCategoryWheelScroll(event) {
+    if ("onscrollend" in event.currentTarget) return;
     window.clearTimeout(wheelScrollTimeout.current);
     wheelScrollTimeout.current = window.setTimeout(() => {
-      const viewport = categoryWheelRef.current;
-      if (!viewport) return;
-      const center = viewport.scrollTop + viewport.clientHeight / 2;
-      let closestCategory = filter;
-      let closestDistance = Infinity;
-      for (const [category, option] of categoryOptionRefs.current) {
-        const distance = Math.abs(option.offsetTop + option.offsetHeight / 2 - center);
-        if (distance < closestDistance) {
-          closestCategory = category;
-          closestDistance = distance;
-        }
-      }
-      selectCategory(closestCategory);
-    }, 90);
+      selectNearestCategory();
+    }, 240);
   }
+
+  useEffect(() => {
+    const viewport = categoryWheelRef.current;
+    if (!viewport || !("onscrollend" in viewport)) return undefined;
+    function handleScrollEnd() {
+      window.clearTimeout(wheelScrollTimeout.current);
+      selectNearestCategory();
+    }
+    viewport.addEventListener("scrollend", handleScrollEnd);
+    return () => viewport.removeEventListener("scrollend", handleScrollEnd);
+  }, [categoryOptions, filter]);
 
   function handleCategoryKeyDown(event) {
     const currentIndex = Math.max(0, categoryOptions.indexOf(filter));
