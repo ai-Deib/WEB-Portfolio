@@ -200,6 +200,7 @@ function SocialsModal({ open, onClose, socials }) {
 }
 
 function PublicPortfolio() {
+  const publicSiteRef = useRef(null);
   const [uploaded, setUploaded] = useState([]);
   const [groups, setGroups] = useState([]);
   const [socials, setSocials] = useState([]);
@@ -210,6 +211,52 @@ function PublicPortfolio() {
   const categoryWheelRef = useRef(null);
   const categoryOptionRefs = useRef(new Map());
   const wheelScrollTimeout = useRef(null);
+
+  useEffect(() => {
+    const targets = document.querySelectorAll(".public-site [data-reveal]");
+    if (!("IntersectionObserver" in window)) {
+      targets.forEach((target) => target.classList.add("is-visible"));
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -32px 0px" });
+    targets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, [uploaded, groups, filter, selectedProjectIndex, socialsOpen]);
+
+  useEffect(() => {
+    const site = publicSiteRef.current;
+    if (!site) return undefined;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    let frame = 0;
+
+    function updateGradient() {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const progress = scrollableHeight > 0
+          ? Math.max(0, Math.min(window.scrollY / scrollableHeight, 1))
+          : 0;
+        site.style.setProperty("--scroll-phase", `${(progress * 100).toFixed(2)}%`);
+        frame = 0;
+      });
+    }
+
+    updateGradient();
+    window.addEventListener("scroll", updateGradient, { passive: true });
+    window.addEventListener("resize", updateGradient);
+    return () => {
+      window.removeEventListener("scroll", updateGradient);
+      window.removeEventListener("resize", updateGradient);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [uploaded, groups]);
 
   useEffect(() => {
     let active = true;
@@ -305,8 +352,8 @@ function PublicPortfolio() {
   }
 
   return (
-    <main>
-      <header className="site-header">
+    <main ref={publicSiteRef} className="public-site">
+      <header className="site-header" data-reveal="block">
         <a className="wordmark" href="#top" aria-label="Xairo home">XAIRO<span>®</span></a>
         <nav className="main-nav" aria-label="Main navigation">
           <a href="#work">Selected work</a>
@@ -317,24 +364,29 @@ function PublicPortfolio() {
       </header>
 
       <section className="hero" id="top">
-        <div className="hero-kicker"><span>INDEPENDENT CREATIVE</span><span>BASED ANYWHERE · WORKING EVERYWHERE</span></div>
-        <h1>Making<br />good things <span className="hero-accent">move.</span></h1>
+        <div className="hero-kicker" data-reveal="block"><span>INDEPENDENT CREATIVE</span><span>BASED ANYWHERE · WORKING EVERYWHERE</span></div>
+        <h1>
+          <span data-reveal="word" style={{ "--reveal-delay": "0ms" }}>Making</span><br />
+          <span data-reveal="word" style={{ "--reveal-delay": "70ms" }}>good</span>{" "}
+          <span data-reveal="word" style={{ "--reveal-delay": "140ms" }}>things</span>{" "}
+          <span className="hero-accent" data-reveal="word" style={{ "--reveal-delay": "210ms" }}>move.</span>
+        </h1>
         <div className="hero-bottom">
-          <p>Creative direction, films &amp; images<br />for people with something to say.</p>
-          <a href="#work" className="round-link" aria-label="Scroll to selected work"><Arrow /></a>
-          <span className="hero-index">SCROLL TO EXPLORE&nbsp; ↓</span>
+          <p data-reveal="paragraph">Creative direction, films &amp; images<br />for people with something to say.</p>
+          <a href="#work" className="round-link" aria-label="Scroll to selected work" data-reveal="block"><Arrow /></a>
+          <span className="hero-index" data-reveal="block">SCROLL TO EXPLORE&nbsp; ↓</span>
         </div>
-        <div className="hero-orbit" aria-hidden="true"><span>X</span></div>
+        <div className="hero-orbit" aria-hidden="true" data-reveal="block"><span>X</span></div>
       </section>
 
       <section className="work-section section-wrap" id="work">
         <div className="section-heading">
-          <div><p className="eyebrow">A FEW RECENT FAVORITES</p><h2>Selected work<span className="green-dot">.</span></h2></div>
-          <p className="work-count">{String(projects.length).padStart(2, "0")} <span>PROJECTS</span></p>
+          <div data-reveal="block"><p className="eyebrow">A FEW RECENT FAVORITES</p><h2>Selected work<span className="green-dot">.</span></h2></div>
+          <p className="work-count" data-reveal="block">{String(projects.length).padStart(2, "0")} <span>PROJECTS</span></p>
         </div>
         {loadError && <p className="notice" role="status">{loadError}</p>}
         <div className="work-showcase">
-          <div className="category-wheel">
+          <div className="category-wheel" data-reveal="block">
             <p className="wheel-label">SCROLL TO EXPLORE</p>
             <div
               className="category-wheel-viewport"
@@ -380,7 +432,7 @@ function PublicPortfolio() {
             <p className="wheel-hint">Use scroll or ↑ ↓</p>
           </div>
 
-          <div className="work-preview">
+          <div className="work-preview" data-reveal="block">
             {activeProject ? (
               <>
                 <div className="work-preview-media">
@@ -438,27 +490,42 @@ function PublicPortfolio() {
       </section>
 
       <section className="about-section section-wrap" id="about">
-        <div className="about-label"><p className="eyebrow">A BIT ABOUT ME</p><span>01 — 03</span></div>
+        <div className="about-label" data-reveal="block"><p className="eyebrow">A BIT ABOUT ME</p><span>01 — 03</span></div>
         <div className="about-copy">
-          <h2><span className="about-quote">“</span>Curious by nature.<br /><span className="about-highlight">Intentional by design.</span><span className="about-quote">”</span></h2>
-          <p>Hi, I’m Alexander L. de Guzman, also known as Xairo—a Filipino motion graphics editor based in the Philippines, specializing in motion editing, visual composition, and purposeful storytelling. With a strong foundation in editing fundamentals and design principles, I turn raw ideas into cohesive, engaging visuals.
+          <h2>
+            <span className="about-quote" data-reveal="word" style={{ "--reveal-delay": "0ms" }}>“</span>
+            <span data-reveal="word" style={{ "--reveal-delay": "60ms" }}>Curious</span>{" "}
+            <span data-reveal="word" style={{ "--reveal-delay": "120ms" }}>by</span>{" "}
+            <span data-reveal="word" style={{ "--reveal-delay": "180ms" }}>nature.</span><br />
+            <span className="about-highlight" data-reveal="word" style={{ "--reveal-delay": "0ms" }}>Intentional</span>{" "}
+            <span data-reveal="word" style={{ "--reveal-delay": "60ms" }}>by</span>{" "}
+            <span data-reveal="word" style={{ "--reveal-delay": "120ms" }}>design.</span>
+            <span className="about-quote" data-reveal="word" style={{ "--reveal-delay": "180ms" }}>”</span>
+          </h2>
+          <p data-reveal="paragraph">Hi, I’m Alexander L. de Guzman, also known as Xairo—a Filipino motion graphics editor based in the Philippines, specializing in motion editing, visual composition, and purposeful storytelling. With a strong foundation in editing fundamentals and design principles, I turn raw ideas into cohesive, engaging visuals.
             By combining technical know-how with a streamlined production workflow, I focus on thoughtful pacing, clear visual hierarchy, and the finer details of every frame. I enjoy collaborating with creators and brands to deliver polished, memorable work that feels intentional from start to finish.</p>
-          <a className="text-link" href="#contact">A little more about me <Arrow diagonal /></a>
+          <a className="text-link" href="#contact" data-reveal="block">A little more about me <Arrow diagonal /></a>
         </div>
-        <div className="about-stamp" aria-hidden="true">GOOD<br />WORK<br /><span>ONLY</span></div>
+        <div className="about-stamp" aria-hidden="true" data-reveal="block">GOOD<br />WORK<br /><span>ONLY</span></div>
       </section>
 
       <section className="contact-section" id="contact">
-        <p className="eyebrow">HAVE A GOOD ONE IN MIND?</p>
-        <h2>Let’s make<br />it <span>happen.</span></h2>
+        <p className="eyebrow" data-reveal="block">HAVE A GOOD ONE IN MIND?</p>
+        <h2>
+          <span data-reveal="word" style={{ "--reveal-delay": "0ms" }}>Let’s</span>{" "}
+          <span data-reveal="word" style={{ "--reveal-delay": "80ms" }}>make</span><br />
+          <span data-reveal="word" style={{ "--reveal-delay": "0ms" }}>it</span>{" "}
+          <span className="contact-highlight" data-reveal="word" style={{ "--reveal-delay": "80ms" }}>happen.</span>
+        </h2>
         <button
           className="contact-link contact-trigger"
           type="button"
           onClick={() => setSocialsOpen(true)}
+          data-reveal="block"
         >
           hello@xairo.studio <Arrow diagonal />
         </button>
-        <footer className="site-footer">
+        <footer className="site-footer" data-reveal="block">
           <a className="wordmark" href="#top">XAIRO<span>®</span></a>
           <span>INDEPENDENT BY DESIGN.</span>
           <span>© {new Date().getFullYear()} XAIRO STUDIO</span>
