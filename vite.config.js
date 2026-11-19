@@ -57,5 +57,10 @@ export default defineConfig(({ mode }) => {
   for (const [name, value] of Object.entries(environment)) {
     if (process.env[name] === undefined) process.env[name] = value;
   }
-  return { plugins: [localApiPlugin()] };
+  return {
+    optimizeDeps: {
+      exclude: ["@ffmpeg/ffmpeg"],
+    },
+    plugins: [localApiPlugin()],
+  };
 });
