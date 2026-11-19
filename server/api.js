@@ -391,7 +391,7 @@ async function handleUpload(request, response) {
 export async function handleApiRequest(request, response) {
   try {
     const url = new URL(request.url, `https://${request.headers.host || "localhost"}`);
-    const route = url.pathname.replace(/^\/api\/?/, "");
+    const route = url.searchParams.get("__route") || url.pathname.replace(/^\/api\/?/, "");
     if (route === "public") {
       requireMethod(request, ["GET"]);
       return await handlePublicPortfolio(response);

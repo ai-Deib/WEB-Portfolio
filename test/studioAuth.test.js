@@ -74,6 +74,32 @@ test("studio APIs reject requests without a valid studio session", async () => {
   assert.match(response.payload.error, /access code/i);
 });
 
+test("rewritten Vercel API paths dispatch to the requested route", async () => {
+  const response = {
+    headers: {},
+    statusCode: 200,
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
+    status(status) {
+      this.statusCode = status;
+      return this;
+    },
+    json(payload) {
+      this.payload = payload;
+      return this;
+    },
+  };
+
+  await handleApiRequest({
+    method: "GET",
+    url: "/api/router?__route=studio/projects",
+    headers: { host: "localhost:3000" },
+  }, response);
+  assert.equal(response.statusCode, 401);
+  assert.match(response.payload.error, /studio access/i);
+});
+
 test("studio session endpoint rejects cross-origin unlock attempts", async () => {
   const response = {
     headers: {},
