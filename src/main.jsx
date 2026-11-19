@@ -510,7 +510,7 @@ function PublicPortfolio() {
 
       <section className="work-section section-wrap" id="work" data-focus-section>
         <div className="section-heading">
-          <div data-reveal="block"><p className="eyebrow">A FEW RECENT FAVORITES</p><h2>Selected work<span className="green-dot">.</span></h2></div>
+          <div data-reveal="block"><p className="eyebrow">A FEW RECENT FAVORITES</p><h2>Projects I've Made<span className="green-dot">.</span></h2></div>
           <p className="work-count" data-reveal="block">{String(projects.length).padStart(2, "0")} <span>PROJECTS</span></p>
         </div>
         {loadError && <p className="notice" role="status">{loadError}</p>}
@@ -652,7 +652,7 @@ function PublicPortfolio() {
           onClick={() => setSocialsOpen(true)}
           data-reveal="block"
         >
-          hello@xairo.studio <Arrow diagonal />
+          contact me@xairo.socials <Arrow diagonal />
         </button>
         <footer className="site-footer" data-reveal="block">
           <a className="wordmark" href="#top">XAIRO<span>®</span></a>
