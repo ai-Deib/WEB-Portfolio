@@ -26,6 +26,7 @@ import {
   sanitizeLinkUrl,
 } from "./socialIcons";
 import { getLegacyPortfolioContent } from "./legacyMediaStore";
+import { parseProjectUrl } from "../shared/projectLinks.js";
 import "./styles.css";
 
 const ALL_WORK = "All work";
@@ -94,6 +95,35 @@ function Arrow({ diagonal = false }) {
         <path d="M4 12h15m-7-7 7 7-7 7" />
       )}
     </svg>
+  );
+}
+
+function ExternalProjectPreview({ project }) {
+  const projectLink = parseProjectUrl(project.externalUrl);
+  if (!projectLink) {
+    return <div className="external-project-card"><span>PROJECT LINK UNAVAILABLE</span></div>;
+  }
+
+  if (projectLink.embedUrl) {
+    return (
+      <iframe
+        className={`external-project-embed external-project-embed-${projectLink.provider.toLowerCase()}`}
+        src={projectLink.embedUrl}
+        title={`${project.title} on ${projectLink.provider}`}
+        loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+      />
+    );
+  }
+
+  return (
+    <a className="external-project-card" href={projectLink.url} target="_blank" rel="noopener noreferrer">
+      <span>EXTERNAL PROJECT · {projectLink.provider}</span>
+      <strong>{project.title}</strong>
+      <span className="external-project-cta">OPEN PROJECT <Arrow diagonal /></span>
+    </a>
   );
 }
 
@@ -354,7 +384,9 @@ function PublicPortfolio() {
             {activeProject ? (
               <>
                 <div className="work-preview-media">
-                  {activeProject.fileType?.startsWith("video/") ? (
+                  {activeProject.externalUrl ? (
+                    <ExternalProjectPreview project={activeProject} />
+                  ) : activeProject.fileType?.startsWith("video/") ? (
                     <video
                       controls
                       playsInline
@@ -374,6 +406,11 @@ function PublicPortfolio() {
                     <p className="eyebrow">{activeProject.category} · {activeProject.year || "2025"}</p>
                     <h3>{activeProject.title}</h3>
                     <p>{activeProject.description || activeProject.client || "Selected creative work."}</p>
+                    {activeProject.externalUrl && parseProjectUrl(activeProject.externalUrl)?.embedUrl && (
+                      <a className="external-source-link" href={activeProject.externalUrl} target="_blank" rel="noopener noreferrer">
+                        Open original on {parseProjectUrl(activeProject.externalUrl).provider} <Arrow diagonal />
+                      </a>
+                    )}
                   </div>
                   {projects.length > 1 && (
                     <div className="preview-controls" aria-label="Preview navigation">
@@ -475,6 +512,8 @@ function Studio() {
   const [groupError, setGroupError] = useState("");
   const [groupSuccess, setGroupSuccess] = useState("");
   const [form, setForm] = useState({ title: "", category: DEFAULT_GROUPS[0], description: "", client: "" });
+  const [mediaSource, setMediaSource] = useState("file");
+  const [externalUrl, setExternalUrl] = useState("");
 
   const [socials, setSocials] = useState([]);
   const [socialForm, setSocialForm] = useState(emptySocialForm);
@@ -772,32 +811,42 @@ function Studio() {
     setSuccess("");
     const formElement = event.currentTarget;
     const data = new FormData(formElement);
-    const file = selectedMedia || data.get("media");
+    const file = mediaSource === "file" ? selectedMedia || data.get("media") : null;
+    const link = mediaSource === "url" ? parseProjectUrl(externalUrl) : null;
     const poster = data.get("poster");
-    if (!(file instanceof File) || file.size === 0) {
-      setError("Choose a video or photo to upload.");
+    if (mediaSource === "url" && !link) {
+      setError("Enter a valid HTTPS social or project URL.");
       return;
     }
-    if (!isVideoFile(file) && !file.type.startsWith("image/")) {
-      setError("Choose a supported video or image file.");
-      return;
+    if (mediaSource === "file") {
+      if (!(file instanceof File) || file.size === 0) {
+        setError("Choose a video or photo to upload.");
+        return;
+      }
+      if (!isVideoFile(file) && !file.type.startsWith("image/")) {
+        setError("Choose a supported video or image file.");
+        return;
+      }
     }
 
     const uploadedPaths = [];
     setSaving(true);
     setUploadStatus("");
     try {
-      const mediaUpload = await uploadMediaFile(file, "project", ({ phase, progress }) => {
-        setUploadStatus(phase === "compressing"
-          ? `Optimizing video for web${progress ? ` · ${Math.round(progress * 100)}%` : "…"}`
-          : "Uploading optimized media…");
-      });
-      uploadedPaths.push(mediaUpload.path);
+      let mediaUpload = null;
       let posterPath = "";
-      if (poster instanceof File && poster.size > 0) {
-        const posterUpload = await uploadMediaFile(poster, "poster");
-        posterPath = posterUpload.path;
-        uploadedPaths.push(posterPath);
+      if (mediaSource === "file") {
+        mediaUpload = await uploadMediaFile(file, "project", ({ phase, progress }) => {
+          setUploadStatus(phase === "compressing"
+            ? `Optimizing video for web${progress ? ` · ${Math.round(progress * 100)}%` : "…"}`
+            : "Uploading optimized media…");
+        });
+        uploadedPaths.push(mediaUpload.path);
+        if (poster instanceof File && poster.size > 0) {
+          const posterUpload = await uploadMediaFile(poster, "poster");
+          posterPath = posterUpload.path;
+          uploadedPaths.push(posterPath);
+        }
       }
 
       const project = await saveProject({
@@ -807,17 +856,20 @@ function Studio() {
         description: form.description.trim(),
         client: form.client.trim(),
         year: String(new Date().getFullYear()),
-        fileType: mediaUpload.file.type,
-        mediaPath: mediaUpload.path,
+        fileType: mediaUpload ? mediaUpload.file.type : "external",
+        mediaPath: mediaUpload ? mediaUpload.path : "",
+        externalUrl: link?.url || "",
         posterPath,
         createdAt: Date.now(),
       });
       setProjects((current) => [project, ...current]);
-      setSourceVideos((current) => current.filter((item) => item !== file));
+      if (file) setSourceVideos((current) => current.filter((item) => item !== file));
       setSelectedMedia(null);
+      setExternalUrl("");
+      setMediaSource("file");
       setForm({ title: "", category: groups[0] || DEFAULT_GROUPS[0], description: "", client: "" });
       formElement.reset();
-      setSuccess("Project published to your portfolio.");
+      setSuccess(mediaUpload ? "Project published to your portfolio." : "Social project link published to your portfolio.");
       setUploadStatus("");
     } catch (uploadError) {
       let message = uploadError.message || "The project could not be saved.";
@@ -1276,28 +1328,72 @@ function Studio() {
             <label className="field-label" htmlFor="project-client">Client / credit <span className="optional">OPTIONAL</span></label>
             <input id="project-client" maxLength="60" placeholder="Who was it for?" value={form.client} onChange={(event) => setForm({ ...form, client: event.target.value })} />
 
-            <label className="field-label" htmlFor="project-media">Video or photo <span>*</span></label>
-            <label className="file-drop" htmlFor="project-media">
-              <span className="file-icon">↥</span><strong>{selectedMedia?.name || "Choose a file"}</strong>
-              <span>{selectedMedia ? `${formatFileSize(selectedMedia.size)} · selected` : "Videos are converted to MP4 and compressed to 1080p before upload."}</span>
-            </label>
-            <input
-              ref={mediaInputRef}
-              className="visually-hidden"
-              id="project-media"
-              name="media"
-              type="file"
-              accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,image/gif,image/avif"
-              required={!selectedMedia}
-              onChange={(event) => setSelectedMedia(event.target.files?.[0] || null)}
-            />
-            <label className="field-label poster-label" htmlFor="project-poster">Video cover image <span className="optional">OPTIONAL</span></label>
-            <input className="poster-input" id="project-poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" />
+            <div className="media-source-switch" role="group" aria-label="Project media source">
+              <button
+                type="button"
+                className={mediaSource === "file" ? "project-view-button active" : "project-view-button"}
+                aria-pressed={mediaSource === "file"}
+                disabled={saving}
+                onClick={() => {
+                  setMediaSource("file");
+                  setError("");
+                  setSuccess("");
+                }}
+              >Upload a file</button>
+              <button
+                type="button"
+                className={mediaSource === "url" ? "project-view-button active" : "project-view-button"}
+                aria-pressed={mediaSource === "url"}
+                disabled={saving}
+                onClick={() => {
+                  setMediaSource("url");
+                  setError("");
+                  setSuccess("");
+                }}
+              >Use a social URL</button>
+            </div>
+            {mediaSource === "file" ? (
+              <>
+                <label className="field-label" htmlFor="project-media">Video or photo <span>*</span></label>
+                <label className="file-drop" htmlFor="project-media">
+                  <span className="file-icon">↥</span><strong>{selectedMedia?.name || "Choose a file"}</strong>
+                  <span>{selectedMedia ? `${formatFileSize(selectedMedia.size)} · selected` : "Videos are converted to MP4 and compressed to 1080p before upload."}</span>
+                </label>
+                <input
+                  ref={mediaInputRef}
+                  className="visually-hidden"
+                  id="project-media"
+                  name="media"
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,image/gif,image/avif"
+                  required={!selectedMedia}
+                  onChange={(event) => setSelectedMedia(event.target.files?.[0] || null)}
+                />
+                <label className="field-label poster-label" htmlFor="project-poster">Video cover image <span className="optional">OPTIONAL</span></label>
+                <input className="poster-input" id="project-poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" />
+              </>
+            ) : (
+              <>
+                <label className="field-label" htmlFor="project-url">Public project URL <span>*</span></label>
+                <input
+                  id="project-url"
+                  type="url"
+                  required
+                  maxLength="2048"
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  value={externalUrl}
+                  onChange={(event) => setExternalUrl(event.target.value)}
+                />
+                <p className="field-help">YouTube, TikTok, and Vimeo videos can embed here. Other HTTPS social links appear as a safe link card.</p>
+              </>
+            )}
             <button className="publish-button" type="submit" disabled={saving}>{saving ? "Publishing…" : "Publish project"} <Arrow /></button>
             {uploadStatus && <p className="form-message upload-status" role="status">{uploadStatus}</p>}
             {error && <p className="form-message error" role="alert">{error}</p>}
             {success && <p className="form-message success" role="status">{success}</p>}
-            <p className="storage-note">Each clip is converted to browser-compatible H.264 MP4, capped at 1080p, then uploaded. The optimized file must be 50 MB or smaller. Publishing makes it public.</p>
+            <p className="storage-note">{mediaSource === "file"
+              ? "Each clip is converted to browser-compatible H.264 MP4, capped at 1080p, then uploaded. The optimized file must be 50 MB or smaller. Publishing makes it public."
+              : "The URL is saved as a project link. YouTube, TikTok, and Vimeo may show an embedded preview; other platforms open in a new tab."}</p>
           </form>
 
           <div className="library-panel">
@@ -1329,7 +1425,11 @@ function Studio() {
                 {visibleProjects.map((project) => (
                   <article className="library-item" key={project.id}>
                     <div className="library-thumb">
-                      {project.fileType.startsWith("video/") ? <video src={project.mediaUrl} poster={project.posterUrl || undefined} /> : <img src={project.mediaUrl} alt="" />}
+                      {project.externalUrl
+                        ? <span className="library-external-thumb">LINK</span>
+                        : project.fileType.startsWith("video/")
+                          ? <video src={project.mediaUrl} poster={project.posterUrl || undefined} />
+                          : <img src={project.mediaUrl} alt="" />}
                     </div>
                     <div className="library-info"><span>{project.category} · {project.year}</span><h3>{project.title}</h3><p>{project.client || project.description || "No details added"}</p></div>
                     <div className="project-item-actions">

@@ -116,6 +116,7 @@ export async function saveProject(project) {
     year: project.year,
     fileType: project.fileType,
     mediaPath: project.mediaPath,
+    externalUrl: project.externalUrl || "",
     posterPath: project.posterPath,
     archived: project.archived,
     createdAt: project.createdAt,

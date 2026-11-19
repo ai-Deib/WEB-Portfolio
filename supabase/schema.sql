@@ -11,11 +11,18 @@ create table if not exists public.portfolio_projects (
   client text not null default '',
   year text not null,
   file_type text not null,
-  media_path text not null,
+  media_path text,
+  external_url text,
   poster_path text,
   archived boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.portfolio_projects
+  alter column media_path drop not null;
+
+alter table public.portfolio_projects
+  add column if not exists external_url text;
 
 create index if not exists portfolio_projects_public_order
   on public.portfolio_projects (archived, created_at desc);

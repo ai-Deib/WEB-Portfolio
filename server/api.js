@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { parseProjectUrl } from "../shared/projectLinks.js";
 import {
   HttpError,
   readJsonBody,
@@ -61,6 +62,7 @@ function projectFromRow(client, row) {
     fileType: row.file_type,
     mediaPath: row.media_path,
     mediaUrl: getPublicFileUrl(client, row.media_path),
+    externalUrl: row.external_url || "",
     posterPath: row.poster_path || "",
     posterUrl: getPublicFileUrl(client, row.poster_path),
     archived: row.archived,
@@ -183,16 +185,28 @@ async function handleProjects(request, response) {
   }
 
   const body = readJsonBody(request);
-  const fileType = requireText(body.fileType, "Media type", 80);
-  if (!FILE_EXTENSIONS.has(fileType)) {
-    throw new HttpError(400, "Choose a supported image or video file.");
-  }
   const id = requireText(body.id, "Project ID", 100);
-  const mediaPath = requireObjectPath(body.mediaPath, "projects", "Project media");
-  if (fileType === "video/mp4" && !mediaPath.toLocaleLowerCase().endsWith(".mp4")) {
-    throw new HttpError(400, "Uploaded videos must be encoded as MP4.");
+  const fileType = requireText(body.fileType, "Media type", 80);
+  let mediaPath = null;
+  let posterPath = null;
+  let externalUrl = null;
+  if (fileType === "external") {
+    const projectLink = parseProjectUrl(body.externalUrl);
+    if (!projectLink) throw new HttpError(400, "Enter a valid HTTPS social or project URL.");
+    externalUrl = projectLink.url;
+    if (body.mediaPath || body.posterPath) {
+      throw new HttpError(400, "External projects cannot include uploaded media paths.");
+    }
+  } else {
+    if (!FILE_EXTENSIONS.has(fileType)) {
+      throw new HttpError(400, "Choose a supported image or video file.");
+    }
+    mediaPath = requireObjectPath(body.mediaPath, "projects", "Project media");
+    if (fileType === "video/mp4" && !mediaPath.toLocaleLowerCase().endsWith(".mp4")) {
+      throw new HttpError(400, "Uploaded videos must be encoded as MP4.");
+    }
+    posterPath = body.posterPath ? requireObjectPath(body.posterPath, "posters", "Poster") : null;
   }
-  const posterPath = body.posterPath ? requireObjectPath(body.posterPath, "posters", "Poster") : null;
   const category = requireText(body.category, "Portfolio group", 40);
   const timestamp = Number(body.createdAt);
   const requestedDate = new Date(timestamp);
@@ -206,6 +220,7 @@ async function handleProjects(request, response) {
     year: typeof body.year === "string" ? body.year.slice(0, 4) : String(new Date().getFullYear()),
     file_type: fileType,
     media_path: mediaPath,
+    external_url: externalUrl,
     poster_path: posterPath,
     archived: body.archived === true,
     created_at: createdAt,
