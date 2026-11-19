@@ -482,6 +482,39 @@ function PublicPortfolio() {
 
   return (
     <main ref={publicSiteRef} className="public-site">
+      <div className="charcoal-art" aria-hidden="true">
+        <svg className="charcoal-current" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+          <path
+            className="charcoal-current-line"
+            pathLength="1000"
+            d="M 190 0 C 120 40, 90 75, 140 115 S 280 180, 210 235 S 75 295, 130 355 S 285 415, 205 475 S 65 535, 125 595 S 285 655, 205 715 S 70 775, 130 835 S 275 895, 190 955 S 90 985, 150 1000"
+          />
+        </svg>
+        <svg className="charcoal-cursor" viewBox="0 0 220 140">
+          <path
+            className="charcoal-cursor-trail"
+            d="M 8 102 C 30 55, 48 119, 70 78 S 112 102, 137 57"
+          />
+          <path
+            className="charcoal-cursor-pointer"
+            d="M 147 24 L 147 91 L 164 75 L 181 111 L 194 105 L 177 68 L 200 67 Z"
+          />
+        </svg>
+        <span className="charcoal-shape charcoal-shape--circle" />
+        <span className="charcoal-shape charcoal-shape--square" />
+        <span className="charcoal-shape charcoal-shape--triangle" />
+        <span className="charcoal-shape charcoal-shape--diamond" />
+        <span className="charcoal-shape charcoal-shape--small-circle" />
+        <span className="charcoal-shape charcoal-shape--green-ring" />
+        <span className="charcoal-shape charcoal-shape--green-diamond" />
+        <span className="charcoal-shape charcoal-shape--green-chip" />
+        <span className="charcoal-shape charcoal-shape--dot-cluster" />
+        <span className="charcoal-shape charcoal-shape--bar" />
+        <span className="charcoal-shape charcoal-shape--hexagon" />
+        <span className="charcoal-shape charcoal-shape--outline-square" />
+        <span className="charcoal-shape charcoal-shape--green-dot" />
+        <span className="charcoal-shape charcoal-shape--green-slash" />
+      </div>
       <header className="site-header" data-reveal="block">
         <a className="wordmark" href="#top" aria-label="Xairo home">XAIRO<span>®</span></a>
         <nav className="main-nav" aria-label="Main navigation">
