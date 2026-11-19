@@ -55,10 +55,12 @@ grant all on public.studio_login_attempts to service_role;
 
 insert into public.portfolio_groups (name, display_order)
 values
-  ('Brand film', 0),
-  ('Motion design', 1),
-  ('Documentary', 2),
-  ('Photography', 3)
+  ('Documentary', 0),
+  ('Longform', 1),
+  ('Motion Graphics', 2),
+  ('SaaS', 3),
+  ('Shortform', 4),
+  ('Typography', 5)
 on conflict (name) do nothing;
 
 insert into public.portfolio_socials (id, name, handle, url, logo_preset, display_order)
@@ -75,7 +77,7 @@ values (
   'portfolio-media',
   true,
   52428800,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4', 'video/webm', 'video/quicktime']
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'video/mp4']
 )
 on conflict (id) do update set
   public = excluded.public,

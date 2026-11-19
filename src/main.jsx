@@ -28,44 +28,40 @@ import {
 import { getLegacyPortfolioContent } from "./legacyMediaStore";
 import "./styles.css";
 
-const demoProjects = [
-  {
-    id: "demo-01",
-    number: "01",
-    title: "A little more human",
-    category: "Brand film",
-    description: "A portrait of the people and small moments behind a modern coffee ritual.",
-    image: "https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1400&q=85",
-    client: "Sunday Supply",
-    year: "2025",
-    demo: true,
-  },
-  {
-    id: "demo-02",
-    number: "02",
-    title: "Color in motion",
-    category: "Motion design",
-    description: "Shape, rhythm and a little electricity. A visual identity made to move.",
-    image: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=1400&q=85",
-    client: "Studio Practice",
-    year: "2025",
-    demo: true,
-  },
-  {
-    id: "demo-03",
-    number: "03",
-    title: "After the noise",
-    category: "Documentary",
-    description: "An intimate short about finding stillness in a city that never switches off.",
-    image: "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1400&q=85",
-    client: "Independent",
-    year: "2024",
-    demo: true,
-  },
-];
-
 const ALL_WORK = "All work";
 const LEGACY_MIGRATION_KEY = "xairo-legacy-import-complete";
+const LEGACY_DEFAULT_GROUPS = ["Brand film", "Motion design", "Documentary", "Photography"];
+const GROUP_CAPTIONS = {
+  Documentary: "Human stories, shaped with care.",
+  Longform: "Full-length storytelling built to hold attention.",
+  "Motion Graphics": "Design, type, and imagery brought to life.",
+  SaaS: "Clear product stories for digital tools.",
+  Shortform: "Fast, focused edits made for the scroll.",
+  Typography: "Letters finding rhythm through motion.",
+  "Brand film": "Brand stories with a cinematic point of view.",
+  "Motion design": "Visual identities and ideas set in motion.",
+  Photography: "Still frames with a strong point of view.",
+};
+const VIDEO_FILE_EXTENSION = /\.(mp4|mov|webm|m4v|avi|mkv)$/i;
+
+function isVideoFile(file) {
+  return file.type.startsWith("video/") || VIDEO_FILE_EXTENSION.test(file.name);
+}
+
+function getFolderName(file) {
+  const parts = (file.webkitRelativePath || "").split(/[\\/]/).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 2] : "";
+}
+
+function formatFileSize(size) {
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getShowcaseGroups(groups, projects) {
+  return groups.filter((group) =>
+    DEFAULT_GROUPS.includes(group) ||
+    projects.some((project) => !project.archived && project.category === group));
+}
 
 function isDefaultSocial(social, defaults) {
   return Boolean(defaults) &&
@@ -79,9 +75,9 @@ function isDefaultSocial(social, defaults) {
 
 function hasLegacyContentToImport(content) {
   const legacyGroups = content.groups.map((group) => group.name);
-  const groupsChanged = legacyGroups.length > 0 &&
-    (legacyGroups.length !== DEFAULT_GROUPS.length ||
-      legacyGroups.some((name, index) => name !== DEFAULT_GROUPS[index]));
+  const groupsChanged = legacyGroups.length > 0 && ![DEFAULT_GROUPS, LEGACY_DEFAULT_GROUPS].some((defaults) =>
+    legacyGroups.length === defaults.length &&
+    defaults.every((name) => legacyGroups.includes(name)));
   const socialsChanged = content.socials.length > 0 &&
     (content.socials.length !== DEFAULT_SOCIALS.length ||
       content.socials.some((social) =>
@@ -178,8 +174,12 @@ function PublicPortfolio() {
   const [groups, setGroups] = useState([]);
   const [socials, setSocials] = useState([]);
   const [filter, setFilter] = useState(ALL_WORK);
+  const [selectedProjectIndex, setSelectedProjectIndex] = useState(0);
   const [loadError, setLoadError] = useState("");
   const [socialsOpen, setSocialsOpen] = useState(false);
+  const categoryWheelRef = useRef(null);
+  const categoryOptionRefs = useRef(new Map());
+  const wheelScrollTimeout = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -191,7 +191,9 @@ function PublicPortfolio() {
           setUploaded(nextProjects);
           setGroups(nextGroups);
           setSocials(nextSocials);
-          setFilter((current) => current === ALL_WORK || nextGroups.includes(current) ? current : ALL_WORK);
+          const availableCategories = [ALL_WORK, ...getShowcaseGroups(nextGroups, nextProjects)];
+          setFilter((current) => availableCategories.includes(current) ? current : ALL_WORK);
+          setSelectedProjectIndex(0);
           setLoadError("");
         })
         .catch(() => {
@@ -209,12 +211,68 @@ function PublicPortfolio() {
   }, []);
 
   const projects = useMemo(() => {
-    const visibleDemoProjects = demoProjects.filter((project) => groups.includes(project.category));
-    const allProjects = [...uploaded.filter((project) => !project.archived), ...visibleDemoProjects];
+    const allProjects = uploaded.filter((project) => !project.archived);
     return filter === ALL_WORK
       ? allProjects
       : allProjects.filter((project) => project.category === filter);
-  }, [filter, groups, uploaded]);
+  }, [filter, uploaded]);
+  const showcaseGroups = useMemo(() => getShowcaseGroups(groups, uploaded), [groups, uploaded]);
+  const categoryOptions = useMemo(() => [ALL_WORK, ...showcaseGroups], [showcaseGroups]);
+  const activeProjectIndex = projects.length ? selectedProjectIndex % projects.length : 0;
+  const activeProject = projects[activeProjectIndex];
+
+  useEffect(() => {
+    const viewport = categoryWheelRef.current;
+    const option = categoryOptionRefs.current.get(filter);
+    if (!viewport || !option) return;
+    const top = option.offsetTop - (viewport.clientHeight - option.offsetHeight) / 2;
+    viewport.scrollTo({ top, behavior: "smooth" });
+    setSelectedProjectIndex(0);
+  }, [categoryOptions, filter]);
+
+  useEffect(() => () => window.clearTimeout(wheelScrollTimeout.current), []);
+
+  function selectCategory(category) {
+    if (category === filter) return;
+    setFilter(category);
+    setSelectedProjectIndex(0);
+  }
+
+  function handleCategoryWheelScroll(event) {
+    window.clearTimeout(wheelScrollTimeout.current);
+    wheelScrollTimeout.current = window.setTimeout(() => {
+      const viewport = categoryWheelRef.current;
+      if (!viewport) return;
+      const center = viewport.scrollTop + viewport.clientHeight / 2;
+      let closestCategory = filter;
+      let closestDistance = Infinity;
+      for (const [category, option] of categoryOptionRefs.current) {
+        const distance = Math.abs(option.offsetTop + option.offsetHeight / 2 - center);
+        if (distance < closestDistance) {
+          closestCategory = category;
+          closestDistance = distance;
+        }
+      }
+      selectCategory(closestCategory);
+    }, 90);
+  }
+
+  function handleCategoryKeyDown(event) {
+    const currentIndex = Math.max(0, categoryOptions.indexOf(filter));
+    let nextIndex = currentIndex;
+    if (event.key === "ArrowDown") nextIndex = Math.min(categoryOptions.length - 1, currentIndex + 1);
+    else if (event.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1);
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = categoryOptions.length - 1;
+    else return;
+    event.preventDefault();
+    selectCategory(categoryOptions[nextIndex]);
+  }
+
+  function showProject(direction) {
+    if (projects.length < 2) return;
+    setSelectedProjectIndex((current) => (current + direction + projects.length) % projects.length);
+  }
 
   return (
     <main>
@@ -244,36 +302,101 @@ function PublicPortfolio() {
           <div><p className="eyebrow">A FEW RECENT FAVORITES</p><h2>Selected work<span className="green-dot">.</span></h2></div>
           <p className="work-count">{String(projects.length).padStart(2, "0")} <span>PROJECTS</span></p>
         </div>
-        <div className="filters" aria-label="Filter projects">
-          {[ALL_WORK, ...groups].map((category) => (
-            <button
-              className={filter === category ? "filter active" : "filter"}
-              key={category}
-              onClick={() => setFilter(category)}
-              type="button"
-            >{category}</button>
-          ))}
-        </div>
         {loadError && <p className="notice" role="status">{loadError}</p>}
-        <div className="project-grid">
-          {projects.map((project, index) => (
-            <article className={`project-card ${index === 0 ? "project-featured" : ""}`} key={project.id}>
-              <div className="project-media">
-                {project.fileType?.startsWith("video/") ? (
-                  <video controls playsInline preload="metadata" src={project.mediaUrl} poster={project.posterUrl || undefined} />
-                ) : (
-                  <img src={project.image || project.mediaUrl} alt={project.title} loading="lazy" />
-                )}
-                <span className="project-number">{String(index + 1).padStart(2, "0")}</span>
-                {!project.fileType?.startsWith("video/") && <span className="media-mark" aria-hidden="true"><Arrow diagonal /></span>}
+        <div className="work-showcase">
+          <div className="category-wheel">
+            <p className="wheel-label">SCROLL TO EXPLORE</p>
+            <div
+              className="category-wheel-viewport"
+              ref={categoryWheelRef}
+              role="listbox"
+              aria-label="Portfolio categories"
+              tabIndex="0"
+              onScroll={handleCategoryWheelScroll}
+              onKeyDown={handleCategoryKeyDown}
+            >
+              {categoryOptions.map((category, index) => {
+                const distance = Math.abs(index - categoryOptions.indexOf(filter));
+                const opacity = Math.max(0.18, 1 - distance * 0.27);
+                const scale = Math.max(0.88, 1 - distance * 0.04);
+                const count = category === ALL_WORK
+                  ? uploaded.filter((project) => !project.archived).length
+                  : uploaded.filter((project) => !project.archived && project.category === category).length;
+                return (
+                  <button
+                    className={filter === category ? "category-option active" : "category-option"}
+                    key={category}
+                    ref={(element) => {
+                      if (element) categoryOptionRefs.current.set(category, element);
+                      else categoryOptionRefs.current.delete(category);
+                    }}
+                    role="option"
+                    aria-selected={filter === category}
+                    type="button"
+                    style={{ opacity, transform: `scale(${scale})` }}
+                    onClick={() => selectCategory(category)}
+                  >
+                    <span>{category}</span>
+                    <small>{String(count).padStart(2, "0")}</small>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="wheel-caption">
+              {filter === ALL_WORK
+                ? "Browse every selected project."
+                : GROUP_CAPTIONS[filter] || "A focused collection of selected work."}
+            </p>
+            <p className="wheel-hint">Use scroll or ↑ ↓</p>
+          </div>
+
+          <div className="work-preview">
+            {activeProject ? (
+              <>
+                <div className="work-preview-media">
+                  {activeProject.fileType?.startsWith("video/") ? (
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      src={activeProject.mediaUrl}
+                      poster={activeProject.posterUrl || undefined}
+                    />
+                  ) : (
+                    <img src={activeProject.image || activeProject.mediaUrl} alt={activeProject.title} />
+                  )}
+                  <span className="preview-number">
+                    {String(activeProjectIndex + 1).padStart(2, "0")} / {String(projects.length).padStart(2, "0")}
+                  </span>
+                </div>
+                <div className="work-preview-info">
+                  <div className="work-preview-copy">
+                    <p className="eyebrow">{activeProject.category} · {activeProject.year || "2025"}</p>
+                    <h3>{activeProject.title}</h3>
+                    <p>{activeProject.description || activeProject.client || "Selected creative work."}</p>
+                  </div>
+                  {projects.length > 1 && (
+                    <div className="preview-controls" aria-label="Preview navigation">
+                      <button type="button" onClick={() => showProject(-1)} aria-label="Previous project">
+                        <Arrow />
+                      </button>
+                      <button type="button" onClick={() => showProject(1)} aria-label="Next project">
+                        <Arrow />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="work-preview-empty">
+                <span className="eyebrow">{filter === ALL_WORK ? "YOUR NEXT FEATURE" : "SELECTED CATEGORY"}</span>
+                <h3>{filter === ALL_WORK ? "The work goes here." : filter}</h3>
+                <p>{filter === ALL_WORK
+                  ? "Publish a project in Studio to see its preview here."
+                  : GROUP_CAPTIONS[filter] || "A focused collection of selected work."}</p>
               </div>
-              <div className="project-meta"><span>{project.category}</span><span>{project.year || "2025"}</span></div>
-              <h3>{project.title}</h3>
-              <p className="project-description">{project.description || project.client || "Selected creative work."}</p>
-              {project.client && <span className="project-client">WITH {project.client.toUpperCase()}</span>}
-            </article>
-          ))}
-          {projects.length === 0 && <p className="empty-work">Nothing in this category just yet. Check back soon.</p>}
+            )}
+          </div>
         </div>
       </section>
 
@@ -281,7 +404,8 @@ function PublicPortfolio() {
         <div className="about-label"><p className="eyebrow">A BIT ABOUT ME</p><span>01 — 03</span></div>
         <div className="about-copy">
           <h2><span className="about-quote">“</span>Curious by nature.<br /><span className="about-highlight">Intentional by design.</span><span className="about-quote">”</span></h2>
-          <p>I’m a Filipino motion graphics editor based in the Philippines, specializing in motion editing, AI asset prompting, and visual composition. I shape ideas into engaging edits and cohesive imagery, balancing thoughtful pacing, clear visual hierarchy, and attention to detail. From refining the rhythm of a video to developing AI-assisted assets and composing each frame, I bring curiosity and care to every project. I enjoy collaborating with creators and brands to make work that feels purposeful and memorable.</p>
+          <p>Hi, I’m Alexander L. de Guzman, also known as Xairo—a Filipino motion graphics editor based in the Philippines, specializing in motion editing, visual composition, and purposeful storytelling. With a strong foundation in editing fundamentals and design principles, I turn raw ideas into cohesive, engaging visuals.
+            By combining technical know-how with a streamlined production workflow, I focus on thoughtful pacing, clear visual hierarchy, and the finer details of every frame. I enjoy collaborating with creators and brands to deliver polished, memorable work that feels intentional from start to finish.</p>
           <a className="text-link" href="#contact">A little more about me <Arrow diagonal /></a>
         </div>
         <div className="about-stamp" aria-hidden="true">GOOD<br />WORK<br /><span>ONLY</span></div>
@@ -337,6 +461,9 @@ function Studio() {
   const [activeTab, setActiveTab] = useState("projects");
   const [projectView, setProjectView] = useState("published");
   const [projects, setProjects] = useState([]);
+  const [sourceVideos, setSourceVideos] = useState([]);
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [groups, setGroups] = useState(DEFAULT_GROUPS);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -347,7 +474,7 @@ function Studio() {
   const [groupDeleteTargets, setGroupDeleteTargets] = useState({});
   const [groupError, setGroupError] = useState("");
   const [groupSuccess, setGroupSuccess] = useState("");
-  const [form, setForm] = useState({ title: "", category: "Brand film", description: "", client: "" });
+  const [form, setForm] = useState({ title: "", category: DEFAULT_GROUPS[0], description: "", client: "" });
 
   const [socials, setSocials] = useState([]);
   const [socialForm, setSocialForm] = useState(emptySocialForm);
@@ -355,6 +482,8 @@ function Studio() {
   const [socialError, setSocialError] = useState("");
   const [socialSuccess, setSocialSuccess] = useState("");
   const logoInputRef = useRef(null);
+  const mediaInputRef = useRef(null);
+  const sourceFolderInputRef = useRef(null);
   const visibleProjects = projects.filter((project) => Boolean(project.archived) === (projectView === "archived"));
   const publishedCount = projects.filter((project) => !project.archived).length;
   const archivedCount = projects.length - publishedCount;
@@ -501,11 +630,12 @@ function Studio() {
 
         const uploadedPaths = [];
         try {
-          const mediaPath = await uploadMediaFile(project.mediaBlob, "project");
-          uploadedPaths.push(mediaPath);
+          const mediaUpload = await uploadMediaFile(project.mediaBlob, "project");
+          uploadedPaths.push(mediaUpload.path);
           let posterPath = "";
           if (project.posterBlob instanceof Blob && project.posterBlob.size > 0) {
-            posterPath = await uploadMediaFile(project.posterBlob, "poster");
+            const posterUpload = await uploadMediaFile(project.posterBlob, "poster");
+            posterPath = posterUpload.path;
             uploadedPaths.push(posterPath);
           }
           const saved = await saveProject({
@@ -515,8 +645,8 @@ function Studio() {
             description: project.description || "",
             client: project.client || "",
             year: project.year || String(new Date().getFullYear()),
-            fileType: project.fileType,
-            mediaPath,
+            fileType: mediaUpload.file.type,
+            mediaPath: mediaUpload.path,
             posterPath,
             archived: Boolean(project.archived),
             createdAt: project.createdAt || Date.now(),
@@ -549,7 +679,8 @@ function Studio() {
         let uploadedLogoPath = "";
         try {
           if (social.logoBlob instanceof Blob && social.logoBlob.size > 0) {
-            uploadedLogoPath = await uploadMediaFile(social.logoBlob, "social-logo");
+            const logoUpload = await uploadMediaFile(social.logoBlob, "social-logo");
+            uploadedLogoPath = logoUpload.path;
             logoPath = uploadedLogoPath;
           }
           const saved = await saveSocial({
@@ -595,31 +726,77 @@ function Studio() {
     }
   }
 
+  function handleSourceFolderSelection(event) {
+    const files = Array.from(event.currentTarget.files || []).filter(isVideoFile);
+    event.currentTarget.value = "";
+    if (mediaInputRef.current) mediaInputRef.current.value = "";
+    setError("");
+    setSuccess("");
+    setSelectedMedia(null);
+    if (files.length === 0) {
+      setSourceVideos([]);
+      setError("No supported video clips were found in that folder.");
+      return;
+    }
+    setSourceVideos(files);
+    setSuccess(`${files.length} local video clip(s) ready to select. Nothing uploads until you publish it.`);
+  }
+
+  function handleSelectSourceVideo(file) {
+    const folderName = getFolderName(file);
+    const matchingGroup = groups.find((group) => group.toLocaleLowerCase() === folderName.toLocaleLowerCase());
+    setSelectedMedia(file);
+    if (mediaInputRef.current) mediaInputRef.current.value = "";
+    setForm((current) => ({
+      ...current,
+      title: file.name.replace(VIDEO_FILE_EXTENSION, ""),
+      category: matchingGroup || current.category,
+    }));
+    setError("");
+    setSuccess(matchingGroup || !folderName
+      ? ""
+      : `Add the “${folderName}” group in Portfolio Groups, or choose another group before publishing.`);
+  }
+
+  function handleRemoveSourceVideo(file) {
+    setSourceVideos((current) => current.filter((item) => item !== file));
+    if (selectedMedia === file) {
+      setSelectedMedia(null);
+      if (mediaInputRef.current) mediaInputRef.current.value = "";
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
     setSuccess("");
     const formElement = event.currentTarget;
     const data = new FormData(formElement);
-    const file = data.get("media");
+    const file = selectedMedia || data.get("media");
     const poster = data.get("poster");
     if (!(file instanceof File) || file.size === 0) {
       setError("Choose a video or photo to upload.");
       return;
     }
-    if (!file.type.startsWith("video/") && !file.type.startsWith("image/")) {
+    if (!isVideoFile(file) && !file.type.startsWith("image/")) {
       setError("Choose a supported video or image file.");
       return;
     }
 
     const uploadedPaths = [];
     setSaving(true);
+    setUploadStatus("");
     try {
-      const mediaPath = await uploadMediaFile(file, "project");
-      uploadedPaths.push(mediaPath);
+      const mediaUpload = await uploadMediaFile(file, "project", ({ phase, progress }) => {
+        setUploadStatus(phase === "compressing"
+          ? `Optimizing video for web${progress ? ` · ${Math.round(progress * 100)}%` : "…"}`
+          : "Uploading optimized media…");
+      });
+      uploadedPaths.push(mediaUpload.path);
       let posterPath = "";
       if (poster instanceof File && poster.size > 0) {
-        posterPath = await uploadMediaFile(poster, "poster");
+        const posterUpload = await uploadMediaFile(poster, "poster");
+        posterPath = posterUpload.path;
         uploadedPaths.push(posterPath);
       }
 
@@ -630,15 +807,18 @@ function Studio() {
         description: form.description.trim(),
         client: form.client.trim(),
         year: String(new Date().getFullYear()),
-        fileType: file.type,
-        mediaPath,
+        fileType: mediaUpload.file.type,
+        mediaPath: mediaUpload.path,
         posterPath,
         createdAt: Date.now(),
       });
       setProjects((current) => [project, ...current]);
-      setForm({ title: "", category: "Brand film", description: "", client: "" });
+      setSourceVideos((current) => current.filter((item) => item !== file));
+      setSelectedMedia(null);
+      setForm({ title: "", category: groups[0] || DEFAULT_GROUPS[0], description: "", client: "" });
       formElement.reset();
       setSuccess("Project published to your portfolio.");
+      setUploadStatus("");
     } catch (uploadError) {
       let message = uploadError.message || "The project could not be saved.";
       if (uploadedPaths.length > 0) {
@@ -655,6 +835,7 @@ function Studio() {
       setError(message);
     } finally {
       setSaving(false);
+      setUploadStatus("");
     }
   }
 
@@ -731,13 +912,9 @@ function Studio() {
       return;
     }
 
-    const sampleCount = demoProjects.filter((project) => project.category === name).length;
     const effects = [];
     if (assignedCount > 0) {
       effects.push(`${assignedCount} uploaded project(s) will move to “${destination}”`);
-    }
-    if (sampleCount > 0) {
-      effects.push(`${sampleCount} sample project(s) will be hidden from the public page`);
     }
     const confirmation = effects.length > 0 ? ` ${effects.join(" and ")}.` : "";
     if (!window.confirm(`Remove the “${name}” group?${confirmation}`)) return;
@@ -845,7 +1022,8 @@ function Studio() {
     let uploadedLogoPath = "";
     try {
       if (socialForm.logoBlob) {
-        uploadedLogoPath = await uploadMediaFile(socialForm.logoBlob, "social-logo");
+        const logoUpload = await uploadMediaFile(socialForm.logoBlob, "social-logo");
+        uploadedLogoPath = logoUpload.path;
       }
       const record = await saveSocial({
         id: socialForm.id || crypto.randomUUID(),
@@ -1040,6 +1218,58 @@ function Studio() {
             </select>
             <p className="field-help">Choose the group where this project appears on the public portfolio.</p>
 
+            <div className="source-video-import">
+              <div>
+                <strong>Choose from your portfolio folder</strong>
+                <p>Select <code>Downloads\portfolio</code>. Clips stay on this device until you publish them.</p>
+              </div>
+              <button
+                className="archive-button"
+                type="button"
+                onClick={() => sourceFolderInputRef.current?.click()}
+                disabled={saving}
+              >Choose folder</button>
+              <input
+                ref={sourceFolderInputRef}
+                className="visually-hidden"
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-m4v,video/x-msvideo,video/x-matroska"
+                multiple
+                webkitdirectory=""
+                aria-label="Choose a folder of portfolio videos"
+                onChange={handleSourceFolderSelection}
+              />
+            </div>
+            {sourceVideos.length > 0 && (
+              <div className="source-video-list" aria-label="Videos from the selected folder">
+                <div className="source-video-list-heading">
+                  <strong>Local clips</strong>
+                  <span>{sourceVideos.length}</span>
+                </div>
+                {sourceVideos.map((file) => (
+                  <div className="source-video-item" key={file.webkitRelativePath || `${file.name}-${file.lastModified}`}>
+                    <div className="source-video-details">
+                      <strong>{getFolderName(file) || "Video"}</strong>
+                      <span title={file.name}>{file.name} · {formatFileSize(file.size)}</span>
+                    </div>
+                    <button
+                      className="mini-action"
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleSelectSourceVideo(file)}
+                    >{selectedMedia === file ? "Selected" : "Use clip"}</button>
+                    <button
+                      className="delete-button"
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleRemoveSourceVideo(file)}
+                      aria-label={`Remove ${file.name} from local clips`}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <label className="field-label" htmlFor="project-description">A few words <span className="optional">OPTIONAL</span></label>
             <textarea id="project-description" maxLength="240" rows="3" placeholder="What makes this one special?" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
 
@@ -1048,15 +1278,26 @@ function Studio() {
 
             <label className="field-label" htmlFor="project-media">Video or photo <span>*</span></label>
             <label className="file-drop" htmlFor="project-media">
-              <span className="file-icon">↥</span><strong>Choose a file</strong>              <span>MP4, WebM, MOV, JPG, PNG, WebP, GIF · Max 50 MB</span>
+              <span className="file-icon">↥</span><strong>{selectedMedia?.name || "Choose a file"}</strong>
+              <span>{selectedMedia ? `${formatFileSize(selectedMedia.size)} · selected` : "Videos are converted to MP4 and compressed to 1080p before upload."}</span>
             </label>
-            <input className="visually-hidden" id="project-media" name="media" type="file" accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,image/gif,image/avif" required />
+            <input
+              ref={mediaInputRef}
+              className="visually-hidden"
+              id="project-media"
+              name="media"
+              type="file"
+              accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,image/gif,image/avif"
+              required={!selectedMedia}
+              onChange={(event) => setSelectedMedia(event.target.files?.[0] || null)}
+            />
             <label className="field-label poster-label" htmlFor="project-poster">Video cover image <span className="optional">OPTIONAL</span></label>
             <input className="poster-input" id="project-poster" name="poster" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" />
             <button className="publish-button" type="submit" disabled={saving}>{saving ? "Publishing…" : "Publish project"} <Arrow /></button>
+            {uploadStatus && <p className="form-message upload-status" role="status">{uploadStatus}</p>}
             {error && <p className="form-message error" role="alert">{error}</p>}
             {success && <p className="form-message success" role="status">{success}</p>}
-            <p className="storage-note">Uploads are stored in Supabase and are publicly visible after publishing. Maximum file size is 50 MB.</p>
+            <p className="storage-note">Each clip is converted to browser-compatible H.264 MP4, capped at 1080p, then uploaded. The optimized file must be 50 MB or smaller. Publishing makes it public.</p>
           </form>
 
           <div className="library-panel">
@@ -1306,7 +1547,7 @@ function Studio() {
               <h2>Manage groups</h2>
               <span className="library-count">{String(groups.length).padStart(2, "0")}</span>
             </div>
-            <p className="group-manager-note">Removing a group moves its uploaded projects to another group you choose. Sample projects in that group are hidden from the public page.</p>
+            <p className="group-manager-note">Removing a group moves its uploaded projects to another group you choose.</p>
             {groups.length <= 1 && <p className="group-manager-note">At least one group must remain.</p>}
             {groups.length === 0 ? (
               <div className="library-empty">
@@ -1318,14 +1559,13 @@ function Studio() {
               <div className="group-list">
                 {groups.map((group) => {
                   const assignedCount = projects.filter((project) => project.category === group).length;
-                  const sampleCount = demoProjects.filter((project) => project.category === group).length;
                   const destination = groupDeleteTargets[group] || groups.find((item) => item !== group) || "";
 
                   return (
                     <article className="group-manage-item" key={group}>
                       <div className="group-manage-info">
                         <h3>{group}</h3>
-                        <span>{assignedCount} uploaded · {sampleCount} sample</span>
+                        <span>{assignedCount} uploaded</span>
                       </div>
                       {assignedCount > 0 && (
                         <label className="group-move-field">

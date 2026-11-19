@@ -29,8 +29,6 @@ const FILE_EXTENSIONS = new Map([
   ["image/gif", "gif"],
   ["image/avif", "avif"],
   ["video/mp4", "mp4"],
-  ["video/webm", "webm"],
-  ["video/quicktime", "mov"],
 ]);
 const SOCIAL_PRESETS = new Set([
   "instagram", "youtube", "x", "tiktok", "discord", "linkedin",
@@ -191,6 +189,9 @@ async function handleProjects(request, response) {
   }
   const id = requireText(body.id, "Project ID", 100);
   const mediaPath = requireObjectPath(body.mediaPath, "projects", "Project media");
+  if (fileType === "video/mp4" && !mediaPath.toLocaleLowerCase().endsWith(".mp4")) {
+    throw new HttpError(400, "Uploaded videos must be encoded as MP4.");
+  }
   const posterPath = body.posterPath ? requireObjectPath(body.posterPath, "posters", "Poster") : null;
   const category = requireText(body.category, "Portfolio group", 40);
   const timestamp = Number(body.createdAt);

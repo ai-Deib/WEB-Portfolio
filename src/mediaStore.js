@@ -3,7 +3,7 @@ import { getStorageClient } from "./supabaseClient";
 
 const PORTFOLIO_UPDATED_KEY = "xairo-portfolio-updated";
 
-export const DEFAULT_GROUPS = ["Brand film", "Motion design", "Documentary", "Photography"];
+export const DEFAULT_GROUPS = ["Documentary", "Longform", "Motion Graphics", "SaaS", "Shortform", "Typography"];
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -66,16 +66,27 @@ export function getProjects() {
   return request("/api/studio/projects");
 }
 
-export async function uploadMediaFile(file, kind) {
+export async function uploadMediaFile(file, kind, onProgress) {
+  let uploadFile = file;
+  const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
+  if (kind === "project" && isVideo) {
+    const { transcodeVideoToMp4 } = await import("./videoTranscoder.js");
+    onProgress?.({ phase: "compressing", progress: 0 });
+    uploadFile = await transcodeVideoToMp4(file, (progress) => {
+      onProgress?.({ phase: "compressing", progress });
+    });
+  }
+
   const signedUpload = await request("/api/studio/uploads", {
     method: "POST",
-    body: { kind, fileType: file.type, size: file.size },
+    body: { kind, fileType: uploadFile.type, size: uploadFile.size },
   });
+  onProgress?.({ phase: "uploading" });
   const { error } = await getStorageClient()
     .storage
     .from(signedUpload.bucket)
-    .uploadToSignedUrl(signedUpload.path, signedUpload.token, file, {
-      contentType: file.type,
+    .uploadToSignedUrl(signedUpload.path, signedUpload.token, uploadFile, {
+      contentType: uploadFile.type,
       cacheControl: "3600",
     });
   if (error) {
@@ -87,7 +98,7 @@ export async function uploadMediaFile(file, kind) {
     }
     throw new Error(message);
   }
-  return signedUpload.path;
+  return { path: signedUpload.path, file: uploadFile };
 }
 
 export function deleteUploadedFiles(paths) {
