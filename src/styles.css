@@ -85,7 +85,7 @@ button { color: inherit; }
 .round-link:hover { background: var(--green); border-color: var(--green); color: #101010; transform: translateY(-2px); box-shadow: 0 0 22px rgba(30, 215, 96, .24); }
 .round-link .arrow { margin: 0; font-size: 22px; }
 .hero-index { justify-self: end; color: #999; }
-.hero-orbit { position: absolute; width: min(41vw, 550px); aspect-ratio: 1; border: 1px solid rgba(30,215,96,.12); border-radius: 50%; top: 105px; right: 2vw; }
+.hero-orbit { position: absolute; width: min(41vw, 550px); aspect-ratio: 1; border: 1px solid rgba(30,215,96,.12); border-radius: 50%; top: 50%; right: 2vw; transform: translateY(-50%); }
 .hero-orbit { box-shadow: inset 0 0 28px rgba(30, 215, 96, .025), 0 0 36px rgba(30, 215, 96, .025); }
 .hero-orbit::before, .hero-orbit::after { content: ""; position: absolute; inset: 12%; border: 1px solid rgba(30,215,96,.1); border-radius: 50%; }
 .hero-orbit::after { inset: 25%; }
@@ -629,7 +629,7 @@ button:not(.category-option):not(:disabled):active { animation: button-press .16
   .hero-kicker { font-size: 8px; }
   .hero-kicker span:last-child { max-width: 130px; text-align: right; }
   .hero h1 { font-size: clamp(70px, 15vw, 115px); margin: 50px 0; }
-  .hero-orbit { width: 65vw; top: 190px; right: -14vw; }
+  .hero-orbit { width: 65vw; top: 50%; right: -14vw; }
   .hero-bottom { grid-template-columns: 1fr auto; gap: 18px; }
   .hero-index { grid-column: 1 / -1; justify-self: start; }
   .round-link { grid-column: 2; grid-row: 1; }
