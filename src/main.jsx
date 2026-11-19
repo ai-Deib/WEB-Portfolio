@@ -214,6 +214,73 @@ function PublicPortfolio() {
   const wheelTargetIndexRef = useRef(0);
 
   useEffect(() => {
+    const site = publicSiteRef.current;
+    if (!site) return undefined;
+    const sections = Array.from(site.querySelectorAll("[data-focus-section]"));
+    if (!sections.length) return undefined;
+    site.classList.add("has-section-focus");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      sections.forEach((section) => section.classList.add("is-focused"));
+      return () => site.classList.remove("has-section-focus");
+    }
+
+    let frame = 0;
+
+    function updateFocus() {
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const viewportCenter = viewportHeight / 2;
+      const rankedSections = sections
+        .map((section, index) => {
+          const rect = section.getBoundingClientRect();
+          const visibleTop = Math.max(0, rect.top);
+          const visibleBottom = Math.min(viewportHeight, rect.bottom);
+          const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+          return {
+            section,
+            index,
+            visibility: visibleHeight / viewportHeight,
+            centerDistance: Math.abs((visibleTop + visibleBottom) / 2 - viewportCenter),
+          };
+        })
+        .filter((entry) => entry.visibility > 0)
+        .sort((a, b) => b.visibility - a.visibility
+          || a.centerDistance - b.centerDistance
+          || a.index - b.index);
+      const focusedSections = new Set(rankedSections.slice(0, 2).map((entry) => entry.section));
+
+      sections.forEach((section) => {
+        section.classList.toggle("is-focused", focusedSections.has(section));
+      });
+    }
+
+    function scheduleFocusUpdate() {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        updateFocus();
+      });
+    }
+
+    const resizeObserver = "ResizeObserver" in window
+      ? new ResizeObserver(scheduleFocusUpdate)
+      : null;
+    if (resizeObserver) sections.forEach((section) => resizeObserver.observe(section));
+
+    updateFocus();
+    window.addEventListener("scroll", scheduleFocusUpdate, { passive: true });
+    window.addEventListener("resize", scheduleFocusUpdate);
+
+    return () => {
+      window.removeEventListener("scroll", scheduleFocusUpdate);
+      window.removeEventListener("resize", scheduleFocusUpdate);
+      if (resizeObserver) resizeObserver.disconnect();
+      if (frame) window.cancelAnimationFrame(frame);
+      site.classList.remove("has-section-focus");
+    };
+  }, []);
+
+  useEffect(() => {
     const targets = document.querySelectorAll(".public-site [data-reveal]");
     if (!("IntersectionObserver" in window)) {
       targets.forEach((target) => target.classList.add("is-visible"));
@@ -418,14 +485,14 @@ function PublicPortfolio() {
       <header className="site-header" data-reveal="block">
         <a className="wordmark" href="#top" aria-label="Xairo home">XAIRO<span>®</span></a>
         <nav className="main-nav" aria-label="Main navigation">
-          <a href="#work">Selected work</a>
+          <a href="#work">Projects</a>
           <a href="#about">About</a>
           <a href="#contact">Contact <Arrow diagonal /></a>
         </nav>
         <a className="availability" href="#contact"><span /> Available for projects</a>
       </header>
 
-      <section className="hero" id="top">
+      <section className="hero" id="top" data-focus-section>
         <div className="hero-kicker" data-reveal="block"><span>INDEPENDENT CREATIVE</span><span>BASED ANYWHERE · WORKING EVERYWHERE</span></div>
         <h1>
           <span data-reveal="word" style={{ "--reveal-delay": "0ms" }}>Making</span><br />
@@ -441,7 +508,7 @@ function PublicPortfolio() {
         <div className="hero-orbit" aria-hidden="true" data-reveal="block"><span>X</span></div>
       </section>
 
-      <section className="work-section section-wrap" id="work">
+      <section className="work-section section-wrap" id="work" data-focus-section>
         <div className="section-heading">
           <div data-reveal="block"><p className="eyebrow">A FEW RECENT FAVORITES</p><h2>Selected work<span className="green-dot">.</span></h2></div>
           <p className="work-count" data-reveal="block">{String(projects.length).padStart(2, "0")} <span>PROJECTS</span></p>
@@ -551,7 +618,7 @@ function PublicPortfolio() {
         </div>
       </section>
 
-      <section className="about-section section-wrap" id="about">
+      <section className="about-section section-wrap" id="about" data-focus-section>
         <div className="about-label" data-reveal="block"><p className="eyebrow">A BIT ABOUT ME</p><span>01 — 03</span></div>
         <div className="about-copy">
           <h2>
@@ -571,7 +638,7 @@ function PublicPortfolio() {
         <div className="about-stamp" aria-hidden="true" data-reveal="block">GOOD<br />WORK<br /><span>ONLY</span></div>
       </section>
 
-      <section className="contact-section" id="contact">
+      <section className="contact-section" id="contact" data-focus-section>
         <p className="eyebrow" data-reveal="block">HAVE A GOOD ONE IN MIND?</p>
         <h2>
           <span data-reveal="word" style={{ "--reveal-delay": "0ms" }}>Let’s</span>{" "}
